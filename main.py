@@ -1,9 +1,13 @@
-from fastapi import FastAPI, Form, Request, status
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
+from fastapi import FastAPI, Form, Request, status, HTTPException
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
 
+from deepface import DeepFace
+import cv2
+import numpy as np
+import io
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -20,15 +24,19 @@ async def favicon():
     file_path = './static/' + file_name
     return FileResponse(path=file_path, headers={'mimetype': 'image/vnd.microsoft.icon'})
 
-@app.post('/greg', response_class=HTMLResponse)
-async def greg(request: Request, name: str = Form(...)):
-    if name:
-        print('Request for hello page received with name=%s' % name)
-        return templates.TemplateResponse('hello.html', {"request": request, 'name':name})
-    else:
-        print('Request for hello page received with no name or blank name -- redirecting')
-        return RedirectResponse(request.url_for("index"), status_code=status.HTTP_302_FOUND)
+@app.post("/test/")
+async def test(file: UploadFile = File(...)):
+    try:
+        # Read image as bytes
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
+        # DeepFace analyze (change 'emotion' to ['age','gender','race','emotion'] if you want all attributes)
+        result = DeepFace.analyze(img, actions=['emotion'])
+        return JSONResponse(content=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post('/hello', response_class=HTMLResponse)
 async def hello(request: Request, name: str = Form(...)):
